@@ -186,6 +186,7 @@ $('#seek').onchange = () => { dragging = false; };
 /* ---------- Lista de canciones ---------- */
 let songs = [], cur = -1;
 const ul = $('#list');
+const LRCLIB = 'https://lrclib.net/api'; // cambia esta URL si usas un proxy
 const label = s => s.title + (s.artist ? ' — ' + s.artist : '');
 function renderList() {
   const q = $('#filter').value.toLowerCase();
@@ -203,11 +204,13 @@ async function findLyrics(s) {
   const q = s ? (s.artist + ' ' + s.title).trim() : $('#title').textContent;
   say('Buscando letra en LRCLIB…');
   try {
-    const res = await (await fetch('https://lrclib.net/api/search?q=' + encodeURIComponent(q))).json();
-    const hit = res.find(x => x.syncedLyrics);
+    const r = await fetch(LRCLIB + '/search?q=' + encodeURIComponent(q));
+    if (!r.ok) { say('LRCLIB respondió con el error ' + r.status + '.'); return; }
+    const res = await r.json();
+    const hit = Array.isArray(res) && res.find(x => x.syncedLyrics);
     if (hit) { setLyrics(hit.syncedLyrics); say('Letra encontrada: ' + hit.trackName + ' — ' + hit.artistName + '.'); return; }
     say('LRCLIB no tiene letra sincronizada para esa canción. Carga un .lrc.');
-  } catch (e) { say('No pude consultar LRCLIB (sin conexión o bloqueado por el navegador).'); }
+  } catch (e) { console.error('LRCLIB:', e); say('El navegador no pudo conectar con LRCLIB (' + e.name + ': ' + e.message + '). Abre la consola con F12 para ver el detalle.'); }
   if (!lines.length) box.innerHTML = '<p class="empty">Sin letra. Carga un archivo .lrc o pégalo en el recuadro.</p>';
 }
 async function playSong(i) {
@@ -233,7 +236,7 @@ $('#multi').onchange = async e => {
     else if (f.type.startsWith('audio/') || /^(mp3|wav|ogg|m4a|flac|aac)$/.test(ext)) g.audio = URL.createObjectURL(f);
   }
   let n = 0;
-  for (const [base, g] of Object.entries(groups)) if (g.audio) { songs.push({ title: base, artist: '', audio: g.audio, lrcText: g.lrcText }); n++; }
+  for (const [base, g] of Object.entries(groups)) if (g.audio) { const [a, ...t] = base.split(' - '); songs.push({ title: t.length ? t.join(' - ') : base, artist: t.length ? a : '', audio: g.audio, lrcText: g.lrcText }); n++; }
   e.target.value = '';
   renderList(); say(n + (n === 1 ? ' canción agregada.' : ' canciones agregadas.'));
   if (n && cur < 0) playSong(songs.length - n);
