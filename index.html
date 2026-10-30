@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Karaoke</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;800&display=swap">
+<style>
+:root{
+  --bg:#fbf1e6;--surface:#f0e0ef;--ink:#2b1236;--dim:#8a6b98;--fill:#d11f6b;--btn:#2b1236;--btnink:#fbf1e6;--line:#d9bfd9;
+  color-scheme:light;box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#2b1236;--surface:#3a1b49;--ink:#fff3e4;--dim:#b89bc4;--fill:#ffc857;--btn:#ffc857;--btnink:#2b1236;--line:#5a3470;color-scheme:dark}
+}
+:root[data-theme="dark"]{--bg:#2b1236;--surface:#3a1b49;--ink:#fff3e4;--dim:#b89bc4;--fill:#ffc857;--btn:#ffc857;--btnink:#2b1236;--line:#5a3470;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;height:100%;display:flex;flex-direction:column;overflow-y:auto;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif}
+header{flex:none;padding:1rem 1.25rem .25rem;display:flex;align-items:baseline;gap:.75rem;flex-wrap:wrap}
+h1{margin:0;font-size:1.6rem;font-weight:800;letter-spacing:-.02em}
+#title{color:var(--dim);font-size:.95rem}
+.lyrics{position:relative;flex:1 1 0;min-height:200px;overflow-y:auto;padding:25vh 1rem;text-align:center;scrollbar-width:thin}
+.line{display:block;width:100%;margin:0;padding:.3em .5rem;border:0;background:none;font:inherit;font-size:clamp(1.4rem,5vw,2.4rem);font-weight:800;line-height:1.2;color:var(--dim);opacity:.8;transform:scale(.72);transition:transform .25s,opacity .25s;cursor:pointer}
+.line.past{opacity:.4}
+.line.active{opacity:1;transform:scale(1);color:transparent;background:linear-gradient(90deg,var(--fill) var(--p,0%),var(--dim) var(--p,0%));-webkit-background-clip:text;background-clip:text}
+.empty{color:var(--dim);font-size:1.1rem;max-width:30ch;margin:0 auto;line-height:1.4}
+.deck{flex:none;background:var(--surface);border-top:1px solid var(--line);padding:.9rem 1.25rem 1rem;display:grid;gap:.9rem;grid-template-columns:1fr}
+@media (min-width:820px){.deck{grid-template-columns:1.2fr 1fr}}
+.panel{display:grid;gap:.6rem;align-content:start}
+.row{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+button,.filebtn{font:inherit;font-weight:500;font-size:.95rem;border-radius:999px;border:1.5px solid var(--ink);background:transparent;color:var(--ink);padding:.5rem 1rem;cursor:pointer}
+button.primary{background:var(--btn);color:var(--btnink);border-color:var(--btn)}
+button[aria-pressed="true"]{background:var(--btn);color:var(--btnink);border-color:var(--btn)}
+button:focus-visible,.filebtn:focus-within,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid var(--fill);outline-offset:2px}
+.filebtn input{position:absolute;opacity:0;width:1px;height:1px}
+.filebtn{position:relative;display:inline-block}
+#play{min-width:6.5rem}
+input[type=range]{accent-color:var(--fill);width:100%}
+.time{font-variant-numeric:tabular-nums;color:var(--dim);font-size:.9rem;white-space:nowrap}
+.sl{display:grid;grid-template-columns:5.5rem 1fr;gap:.5rem;align-items:center;font-size:.9rem}
+canvas{width:100%;height:56px;display:block;border-radius:.6rem;background:var(--bg)}
+textarea{width:100%;min-height:6rem;font:.85rem/1.4 ui-monospace,Menlo,Consolas,monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:.6rem;padding:.5rem}
+details summary{cursor:pointer;font-size:.9rem;color:var(--dim)}
+#msg{min-height:1.2em;font-size:.88rem;color:var(--dim);margin:0}
+audio#take{width:100%;height:36px}
+.lista input[type=search]{width:100%;margin:.4rem 0;font:inherit;font-size:.9rem;padding:.4rem .8rem;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+#list{list-style:none;margin:0;padding:0;max-height:9rem;overflow-y:auto}
+.song{display:block;width:100%;text-align:left;border:0;border-radius:.5rem;padding:.4rem .6rem;font-size:.9rem}
+.song.cur{background:var(--btn);color:var(--btnink)}
+@media (prefers-reduced-motion:reduce){.line{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Karaoke</h1>
+  <span id="title">Sin canción cargada</span>
+</header>
+
+<div class="lyrics" id="lyrics" aria-live="off">
+  <p class="empty">Prueba la demo o carga tu propia pista con su letra en formato LRC.</p>
+</div>
+
+<section class="deck">
+  <div class="panel">
+    <div class="row">
+      <button id="play" class="primary" disabled>Reproducir</button>
+      <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Posición" style="flex:1;min-width:8rem" disabled>
+      <span class="time" id="time">0:00 / 0:00</span>
+    </div>
+    <div class="row">
+      <button id="demo">Probar demo</button>
+      <label class="filebtn">Agregar canciones<input id="multi" type="file" multiple accept="audio/*,.lrc,.txt"></label>
+      <label class="filebtn">Cargar letra .lrc<input id="lrcFile" type="file" accept=".lrc,.txt,text/plain"></label>
+      <button id="find">Buscar letra</button>
+    </div>
+    <div class="row">
+      <button id="prev" aria-label="Canción anterior">Anterior</button>
+      <button id="next" aria-label="Canción siguiente">Siguiente</button>
+    </div>
+    <details class="lista" open>
+      <summary>Lista de canciones</summary>
+      <input id="filter" type="search" placeholder="Filtrar por título o artista" aria-label="Filtrar canciones">
+      <ul id="list"></ul>
+    </details>
+    <div class="row">
+      <span class="time">Ajuste de letra</span>
+      <button id="offM" aria-label="Retrasar letra 0,1 segundos">−0,1 s</button>
+      <button id="offP" aria-label="Adelantar letra 0,1 segundos">+0,1 s</button>
+      <span class="time" id="offV">0,0 s</span>
+    </div>
+    <details>
+      <summary>Pegar letra LRC</summary>
+      <textarea id="lrcText" placeholder="[00:12.30] Primera línea&#10;[00:16.00] Segunda línea"></textarea>
+      <button id="lrcApply" style="margin-top:.5rem">Usar esta letra</button>
+    </details>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <button id="mic" aria-pressed="false">Activar micrófono</button>
+      <button id="rec" disabled>Grabar</button>
+    </div>
+    <canvas id="viz" width="600" height="112" aria-label="Nivel del micrófono"></canvas>
+    <label class="sl">Micrófono<input id="gMic" type="range" min="0" max="150" value="90"></label>
+    <label class="sl">Reverb<input id="gRev" type="range" min="0" max="100" value="30"></label>
+    <label class="sl">Eco<input id="gEco" type="range" min="0" max="100" value="15"></label>
+    <p id="msg">Usa auriculares para evitar que el micrófono capte la pista.</p>
+    <audio id="take" controls hidden></audio>
+  </div>
+</section>
+
+<audio id="audio" preload="auto"></audio>
+
+<script>
+const $ = s => document.querySelector(s);
+const audio = $('#audio'), box = $('#lyrics');
+let lines = [], els = [], active = -1, offset = 0, dragging = false, raf = 0;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const fmt = s => { s = Math.max(0, s || 0); return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); };
+const say = t => $('#msg').textContent = t;
+
+/* ---------- Letras (LRC) ---------- */
+function parseLRC(text) {
+  const out = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const stamps = [...raw.matchAll(/\[(\d+):(\d+(?:[.,]\d+)?)\]/g)];
+    if (!stamps.length) continue;
+    const txt = raw.replace(/\[[^\]]*\]/g, '').trim();
+    for (const m of stamps) out.push({ t: Number(m[1]) * 60 + Number(m[2].replace(',', '.')), text: txt });
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+function setLyrics(text) {
+  lines = parseLRC(text); active = -1; els = [];
+  box.innerHTML = '';
+  if (!lines.length) { box.innerHTML = '<p class="empty">No encontré marcas de tiempo. La letra debe tener líneas como [01:23.45] texto.</p>'; return; }
+  lines.forEach((l, i) => {
+    const b = document.createElement('button');
+    b.className = 'line'; b.textContent = l.text || '♪';
+    b.addEventListener('click', () => { audio.currentTime = Math.max(0, l.t - offset); });
+    box.appendChild(b); els.push(b);
+  });
+  box.scrollTop = 0; tick();
+}
+function setActive(i) {
+  els.forEach((e, k) => { e.classList.toggle('active', k === i); e.classList.toggle('past', k < i); if (k !== i) e.style.removeProperty('--p'); });
+  active = i;
+  if (i >= 0) {
+    const e = els[i];
+    box.scrollTo({ top: e.offsetTop - box.clientHeight / 2 + e.offsetHeight / 2, behavior: reduce ? 'auto' : 'smooth' });
+  }
+}
+function tick() {
+  const now = audio.currentTime + offset;
+  let i = -1;
+  for (let k = 0; k < lines.length; k++) { if (lines[k].t <= now) i = k; else break; }
+  if (i !== active) setActive(i);
+  if (i >= 0) {
+    const end = lines[i + 1] ? lines[i + 1].t : lines[i].t + 4;
+    const p = Math.min(1, Math.max(0, (now - lines[i].t) / Math.max(0.5, (end - lines[i].t) * 0.9)));
+    els[i].style.setProperty('--p', (p * 100).toFixed(1) + '%');
+  }
+  const d = audio.duration || 0;
+  if (!dragging && d) $('#seek').value = Math.round(audio.currentTime / d * 1000);
+  $('#time').textContent = fmt(audio.currentTime) + ' / ' + fmt(d);
+  if (!audio.paused) raf = requestAnimationFrame(tick);
+}
+
+/* ---------- Reproductor ---------- */
+function loadAudio(url, name) {
+  audio.src = url; audio.load();
+  $('#title').textContent = name;
+  $('#play').disabled = false; $('#seek').disabled = false;
+  $('#play').textContent = 'Reproducir';
+}
+$('#play').onclick = () => { audio.paused ? audio.play() : audio.pause(); };
+audio.onplay = () => { $('#play').textContent = 'Pausar'; cancelAnimationFrame(raf); tick(); };
+audio.onpause = () => { $('#play').textContent = 'Reproducir'; cancelAnimationFrame(raf); tick(); };
+audio.onended = () => { $('#play').textContent = 'Reproducir'; if (songs.length > 1 && cur >= 0) step(1); };
+audio.onloadedmetadata = tick;
+audio.onerror = () => say('No pude reproducir ese archivo de audio. Prueba con un MP3 o WAV.');
+$('#seek').oninput = e => { dragging = true; audio.currentTime = e.target.value / 1000 * (audio.duration || 0); tick(); };
+$('#seek').onchange = () => { dragging = false; };
+/* ---------- Lista de canciones ---------- */
+let songs = [], cur = -1;
+const ul = $('#list');
+const label = s => s.title + (s.artist ? ' — ' + s.artist : '');
+function renderList() {
+  const q = $('#filter').value.toLowerCase();
+  ul.innerHTML = '';
+  songs.forEach((s, i) => {
+    if (q && !label(s).toLowerCase().includes(q)) return;
+    const li = document.createElement('li'), b = document.createElement('button');
+    b.textContent = label(s); b.className = i === cur ? 'song cur' : 'song';
+    b.onclick = () => playSong(i);
+    li.appendChild(b); ul.appendChild(li);
+  });
+  if (!ul.children.length) ul.innerHTML = '<li class="time">Sin canciones. Agrega archivos o edita songs.json.</li>';
+}
+async function findLyrics(s) {
+  const q = s ? (s.artist + ' ' + s.title).trim() : $('#title').textContent;
+  say('Buscando letra en LRCLIB…');
+  try {
+    const res = await (await fetch('https://lrclib.net/api/search?q=' + encodeURIComponent(q))).json();
+    const hit = res.find(x => x.syncedLyrics);
+    if (hit) { setLyrics(hit.syncedLyrics); say('Letra encontrada: ' + hit.trackName + ' — ' + hit.artistName + '.'); return; }
+    say('LRCLIB no tiene letra sincronizada para esa canción. Carga un .lrc.');
+  } catch (e) { say('No pude consultar LRCLIB (sin conexión o bloqueado por el navegador).'); }
+  if (!lines.length) box.innerHTML = '<p class="empty">Sin letra. Carga un archivo .lrc o pégalo en el recuadro.</p>';
+}
+async function playSong(i) {
+  const s = songs[i]; if (!s) return;
+  cur = i; renderList(); loadAudio(s.audio, label(s));
+  lines = []; els = []; active = -1; box.innerHTML = '<p class="empty">Cargando letra…</p>';
+  let text = s.lrcText || '';
+  try { if (!text && s.lrc) text = await (await fetch(s.lrc)).text(); } catch (e) {}
+  if (text) setLyrics(text); else await findLyrics(s);
+  audio.play().catch(() => say('Pulsa Reproducir para empezar.'));
+}
+const step = d => { if (songs.length) playSong((cur + d + songs.length) % songs.length); };
+$('#prev').onclick = () => step(-1);
+$('#next').onclick = () => step(1);
+$('#find').onclick = () => findLyrics(songs[cur]);
+$('#filter').oninput = renderList;
+$('#multi').onchange = async e => {
+  const groups = {};
+  for (const f of e.target.files) {
+    const base = f.name.replace(/\.[^.]+$/, ''), ext = f.name.split('.').pop().toLowerCase();
+    const g = groups[base] = groups[base] || {};
+    if (ext === 'lrc' || ext === 'txt') g.lrcText = await f.text();
+    else if (f.type.startsWith('audio/') || /^(mp3|wav|ogg|m4a|flac|aac)$/.test(ext)) g.audio = URL.createObjectURL(f);
+  }
+  let n = 0;
+  for (const [base, g] of Object.entries(groups)) if (g.audio) { songs.push({ title: base, artist: '', audio: g.audio, lrcText: g.lrcText }); n++; }
+  e.target.value = '';
+  renderList(); say(n + (n === 1 ? ' canción agregada.' : ' canciones agregadas.'));
+  if (n && cur < 0) playSong(songs.length - n);
+};
+fetch('songs.json').then(r => r.ok ? r.json() : []).then(l => { songs.unshift(...l); renderList(); }).catch(renderList);
+$('#lrcFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  setLyrics(await f.text());
+  say(lines.length + ' líneas de letra cargadas.');
+};
+$('#lrcApply').onclick = () => { setLyrics($('#lrcText').value); say(lines.length + ' líneas de letra cargadas.'); };
+function bumpOffset(d) { offset = Math.round((offset + d) * 10) / 10; $('#offV').textContent = offset.toFixed(1).replace('.', ',') + ' s'; tick(); }
+$('#offM').onclick = () => bumpOffset(-0.1);
+$('#offP').onclick = () => bumpOffset(0.1);
+
+/* ---------- Demo: melodía generada en el navegador ---------- */
+function demoWav() {
+  const sr = 22050, notes = [262, 294, 330, 349, 392, 349, 330, 294], per = 3, n = sr * per * notes.length;
+  const buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    const t = i / sr, k = Math.floor(t / per), lt = t - k * per, f = notes[k];
+    const env = Math.min(1, lt * 20) * Math.exp(-lt * 1.1);
+    const s = (Math.sin(2 * Math.PI * f * t) + 0.3 * Math.sin(4 * Math.PI * f * t)) * env * 0.35;
+    v.setInt16(44 + i * 2, s * 32767, true);
+  }
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+$('#demo').onclick = () => {
+  cur = -1; renderList(); loadAudio(demoWav(), 'Canción de prueba');
+  setLyrics([
+    '[00:00.00]Esta es una canción de prueba',
+    '[00:03.00]Cada línea se ilumina al sonar',
+    '[00:06.00]Toca una línea para saltar ahí',
+    '[00:09.00]Activa el micrófono y canta encima',
+    '[00:12.00]Sube el reverb para sonar en un teatro',
+    '[00:15.00]Añade un poco de eco a tu voz',
+    '[00:18.00]Si la letra va desfasada, ajústala',
+    '[00:21.00]Ahora prueba con tu canción favorita'
+  ].join('\n'));
+  say('Demo lista. Pulsa Reproducir.');
+};
+
+/* ---------- Micrófono, efectos y grabación ---------- */
+let ctx, stream, micSrc, musicSrc, recDest, micGain, revGain, ecoGain, analyser, recorder, chunks = [], vizRaf = 0;
+function impulse(c, sec = 2.2, decay = 3) {
+  const len = Math.floor(c.sampleRate * sec), b = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); }
+  return b;
+}
+async function startMic() {
+  try {
+    ctx = ctx || new AudioContext();
+    await ctx.resume();
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false } });
+  } catch (err) {
+    say('No pude acceder al micrófono. Revisa el permiso del navegador.'); return;
+  }
+  recDest = recDest || ctx.createMediaStreamDestination();
+  if (!musicSrc) { musicSrc = ctx.createMediaElementSource(audio); musicSrc.connect(ctx.destination); musicSrc.connect(recDest); }
+  micSrc = ctx.createMediaStreamSource(stream);
+  micGain = ctx.createGain(); micGain.gain.value = $('#gMic').value / 100;
+  const out = ctx.createGain(); out.connect(ctx.destination); out.connect(recDest);
+  micSrc.connect(micGain); micGain.connect(out);
+  const conv = ctx.createConvolver(); conv.buffer = impulse(ctx);
+  revGain = ctx.createGain(); revGain.gain.value = $('#gRev').value / 100;
+  micGain.connect(conv); conv.connect(revGain); revGain.connect(out);
+  const delay = ctx.createDelay(1); delay.delayTime.value = 0.28;
+  const fb = ctx.createGain(); fb.gain.value = 0.38;
+  ecoGain = ctx.createGain(); ecoGain.gain.value = $('#gEco').value / 100;
+  micGain.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(ecoGain); ecoGain.connect(out);
+  analyser = ctx.createAnalyser(); analyser.fftSize = 128; micGain.connect(analyser);
+  $('#mic').textContent = 'Desactivar micrófono'; $('#mic').setAttribute('aria-pressed', 'true');
+  $('#rec').disabled = false;
+  say('Micrófono activo. Usa auriculares para evitar acople.');
+  draw();
+}
+function stopMic() {
+  if (recorder && recorder.state === 'recording') recorder.stop();
+  stream.getTracks().forEach(t => t.stop());
+  micSrc.disconnect(); micGain.disconnect();
+  cancelAnimationFrame(vizRaf);
+  const c = $('#viz'), g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height);
+  $('#mic').textContent = 'Activar micrófono'; $('#mic').setAttribute('aria-pressed', 'false');
+  $('#rec').disabled = true; say('Micrófono desactivado.');
+}
+$('#mic').onclick = () => ($('#mic').getAttribute('aria-pressed') === 'true' ? stopMic() : startMic());
+$('#gMic').oninput = e => { if (micGain) micGain.gain.value = e.target.value / 100; };
+$('#gRev').oninput = e => { if (revGain) revGain.gain.value = e.target.value / 100; };
+$('#gEco').oninput = e => { if (ecoGain) ecoGain.gain.value = e.target.value / 100; };
+
+function draw() {
+  const c = $('#viz'), g = c.getContext('2d'), data = new Uint8Array(analyser.frequencyBinCount);
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--fill').trim();
+  (function frame() {
+    analyser.getByteFrequencyData(data);
+    g.clearRect(0, 0, c.width, c.height);
+    g.fillStyle = color;
+    const bars = 32, bw = c.width / bars;
+    for (let i = 0; i < bars; i++) {
+      const h = Math.max(3, data[i] / 255 * c.height);
+      g.fillRect(i * bw + 2, c.height - h, bw - 4, h);
+    }
+    vizRaf = requestAnimationFrame(frame);
+  })();
+}
+
+$('#rec').onclick = () => {
+  if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+  chunks = [];
+  recorder = new MediaRecorder(recDest.stream);
+  recorder.ondataavailable = e => chunks.push(e.data);
+  recorder.onstop = () => {
+    const t = $('#take'); t.src = URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType }));
+    t.hidden = false; $('#rec').textContent = 'Grabar'; say('Grabación lista. Escúchala abajo.');
+  };
+  recorder.start(); $('#rec').textContent = 'Detener'; say('Grabando tu voz junto con la pista…');
+};
+</script>
+</body>
+</html>
